@@ -5,6 +5,7 @@
 #include <initializer_list>
 #include <utility>
 #include <iterator>
+#include <stdexcept>
 
 using std::size_t;
 
@@ -14,64 +15,89 @@ template<class T>
 class Matrix
 {
 private:
-	T *mat;
 	size_t rowNum, colNum;
+	T* mat;
 
-	T *operator[](size_t p)
+	T* operator[](size_t p)
 	{
 		return mat + p * colNum;
 	}
 
+    const T* operator[] (size_t p) const
+    {
+        return mat + p * colNum;
+    }
+    
 public:
-	Matrix() = default;
+	Matrix() : rowNum(0), colNum(0), mat(nullptr) {}
 
 	Matrix(size_t n, size_t m, T _init = T()) : rowNum(n), colNum(m)
 	{
-        mat = new T[n * m];
+        mat = new T[rowNum * colNum];
 		for (size_t i = 0; i < rowNum; i++)
 			for (size_t j = 0; j < colNum; j++)
 			{
-				mat[i][j] = _init;
+				(*this)[i][j] = _init;
 			}
 	}
 
-	explicit Matrix(std::pair <size_t, size_t> sz, T _init = T()) : Matrix(sz.first, sz.second, _init) { }
+	explicit Matrix(std::pair <size_t, size_t> sz, T _init = T()) : Matrix(sz.first, sz.second, _init) {}
 
-	Matrix(std::initializer_list <std::initializer_list<T>> il) : rowNum(il[0].size()), colNum(il.size())
+	Matrix(std::initializer_list <std::initializer_list<T>> il) : rowNum(il.size()), colNum(il.begin() -> size())
 	{
-        mat = new T[il[0].size * il.size()];
-		for (size_t i = 0; i < rowNum; i++)
-			for (size_t j = 0; j < colNum; j++)
+        mat = new T[rowNum * colNum];
+        auto curRow = il.begin();
+		for (size_t i = 0; i < rowNum; i++, curRow++)
+        {
+            auto curElement = curRow -> begin();
+			for (size_t j = 0; j < colNum; j++, curElement++)
 			{
-				mat[i][j] = il[i][j];
+				(*this)[i][j] = *curElement;
 			}
+        }
 	}
 
-	Matrix(const Matrix &o) : rowNum(o.rowNumLength()), colNum(o.colLength())
+	Matrix(const Matrix &o) : rowNum(o.rowLength()), colNum(o.columnLength())
 	{
-        mat = new T[o.rowNumLength() * o.colLength()];
+		mat = new T[rowNum * colNum];
 		for (size_t i = 0; i < rowNum; i++)
 			for (size_t j = 0; j < colNum; j++)
 			{
-				mat[i][j] = o.mat[i][j];
+				(*this)[i][j] = o[i][j];
 			}
 	}
 
 	template<class U>
-	Matrix(const Matrix<U> &o) : rowNum(o.rowNumLength()), colNum(o.colLength())
+	Matrix(const Matrix<U> &o) : rowNum(o.rowLength()), colNum(o.columnLength())
 	{
-        mat = new T[o.rowNum.Length() * o.colLength()];
+        mat = new T[o.rowLength() * o.columnLength()];
         for (size_t i = 0; i < rowNum; i++)
             for (size_t j = 0; j < colNum; j++)
             {
-                mat[i][j] = static_cast<T>(o.mat[i][j]);
+				(*this)[i][j] = static_cast<T>(o(i,j));
             }
 	}
 
+	Matrix(Matrix &&o) noexcept : rowNum(o.rowLength()), colNum(o.columnLength()), mat(o.mat)
+	{
+		o.mat = nullptr;
+	}
+
+
 	Matrix &operator=(const Matrix &o)
 	{
-        (*this) = Matrix(o);
-        return (*this);
+		if (this == &o) return (*this); //same object
+
+		rowNum = o.rowLength();
+		colNum = o.columnLength();
+		if (mat != nullptr) delete[] mat;
+		mat = new T[o.rowLength() * o.columnLength()];
+		for (size_t i = 0; i < rowNum; i++)
+			for (size_t j = 0; j < colNum; j++)
+			{
+				(*this)[i][j] = static_cast<T>(o(i,j));
+			}
+		return (*this);
 	}
 
 	template<class U>
@@ -81,14 +107,12 @@ public:
         return (*this);
 	}
 
-	Matrix(Matrix &&o) noexcept : rowNum(o.rowLength()), colNum(o.colLength()), mat(o.mat)
-	{
-        o.mat = nullptr;
-	}
-
 	Matrix &operator=(Matrix &&o) noexcept
 	{
-        (*this) = Matrix(o);
+		if (mat != nullptr) delete[] mat;
+		rowNum = o.rowNum; colNum = o.colNum;
+		mat = o.mat;
+		o.mat = nullptr;
         return *this;
 	}
 
@@ -108,13 +132,18 @@ public:
 		return colNum;
 	}
 
+	std::pair<size_t, size_t> size() const
+	{
+		return std::make_pair(rowNum, colNum);
+	}
+
 	void resize(size_t n, size_t m, T _init = T())
 	{
         if (rowNum * colNum < n * m)
         {
             T *newmat = new T[n * m];
-            for (int i = 0; i < rowNum * colNum; i++) newmat[i] = mat[i];
-            for (int i = rowNum * colNum; i < n * m; i++) mat[i] = _init;
+            for (size_t i = 0; i < rowNum * colNum; i++) newmat[i] = mat[i];
+            for (size_t i = rowNum * colNum; i < n * m; i++) mat[i] = _init;
             delete[] mat;
             mat = newmat;
         }
@@ -127,11 +156,6 @@ public:
         resize(sz.first, sz.second, _init);
 	}
 
-	std::pair <size_t, size_t> size() const
-	{
-        return std::make_pair(rowNum, colNum);
-	}
-
 	void clear()
 	{
         if (rowNum || colNum) delete[] mat;
@@ -141,25 +165,29 @@ public:
 public:
 	const T &operator()(size_t i, size_t j) const
 	{
-        return mat[i][j];
+		if (i < 0 || i >= rowNum || j < 0 || j >= colNum) throw(std::invalid_argument("operator() : invalid index"));
+        return (*this)[i][j];
 	}
 
 	T &operator()(size_t i, size_t j)
 	{
-        return mat[i][j];
+		if (i < 0 || i >= rowNum || j < 0 || j >= colNum) throw(std::invalid_argument("operator() : invalid index"));
+		return (*this)[i][j];
 	}
 
 	Matrix row(size_t i) const
 	{
-        Matrix ret = Matrix(1,colNum);
-        for (int i = 0; i < colNum; i++) ret.mat[0][i] = mat[0][i];
+		if (i < 0 || i >= rowNum) throw(std::invalid_argument("row : invalid index"));
+		Matrix ret(1,colNum);
+        for (size_t j = 0; j < colNum; j++) ret[0][j] = (*this)[i][j];
         return ret;
 	}
 
 	Matrix column(size_t i) const
 	{
-        Matrix ret = Matrix(rowNum,1);
-        for (int i = 0; i < rowNum; i++) ret.mat[i][0] = mat[i][0];
+		if (i < 0 || i >= colNum) throw(std::invalid_argument("column : invalid index"));
+		Matrix ret(rowNum,1);
+        for (size_t j = 0; j < rowNum; j++) ret[j][0] = (*this)[j][i];
         return ret;
 	}
 
@@ -168,10 +196,10 @@ public:
 	template<class U>
 	bool operator==(const Matrix<U> &o) const
 	{
-        if (rowNum != o.rowLength() || colNum != o.colLength()) return false;
-        for (int i = 0; i < rowNum; i++)
-            for (int j = 0; j < colNum; j++)
-                if (mat[i][j] != o(i,j)) return false;
+        if (rowNum != o.rowLength() || colNum != o.columnLength()) return false;
+        for (size_t i = 0; i < rowNum; i++)
+            for (size_t j = 0; j < colNum; j++)
+                if ((*this)[i][j] != o(i,j)) return false;
         return true;
 	}
 
@@ -183,41 +211,43 @@ public:
 
 	Matrix operator-() const
 	{
-        Matrix ret = Matrix(rowNum, colNum);
-        for (int i = 0; i < rowNum; i++)
-            for (int j = 0; j < colNum; j++) ret.mat[i][j] = -mat[i][j];
+        Matrix ret(rowNum, colNum);
+        for (size_t i = 0; i < rowNum; i++)
+            for (size_t j = 0; j < colNum; j++) ret[i][j] = -(*this)[i][j];
         return ret;
 	}
 
 	template<class U>
 	Matrix &operator+=(const Matrix<U> &o)
 	{
-        for (int i = 0; i < rowNum; i++)
-            for (int j = 0; j < colNum; j++) mat[i][j] += o(i,j);
+		if (rowNum != o.rowLength() || colNum != o.columnLength()) throw(std::invalid_argument("operator += : invalid addend"));
+		for (size_t i = 0; i < rowNum; i++)
+            for (size_t j = 0; j < colNum; j++) (*this)[i][j] = static_cast<T>((*this)[i][j] + o(i,j));
         return (*this);
 	}
 
 	template<class U>
 	Matrix &operator-=(const Matrix<U> &o)
 	{
-        for (int i = 0; i < rowNum; i++)
-            for (int j = 0; j < colNum; j++) mat[i][j] -= o(i,j);
+		if (rowNum != o.rowLength() || colNum != o.columnLength()) throw(std::invalid_argument("operator += : invalid subtrahend"));
+		for (size_t i = 0; i < rowNum; i++)
+            for (size_t j = 0; j < colNum; j++) (*this)[i][j] = static_cast<T>((*this)[i][j] - o(i,j));
         return (*this);
 	}
 
 	template<class U>
 	Matrix &operator*=(const U &x)
 	{
-        for (int i = 0; i < rowNum; i++)
-            for (int j = 0; j < colNum; j++) mat[i][j] *= static_cast<T>(x);
+        for (size_t i = 0; i < rowNum; i++)
+            for (size_t j = 0; j < colNum; j++) (*this)[i][j] = static_cast<T>((*this)[i][j] * x);
         return (*this);
 	}
 
 	Matrix tran() const
 	{
-        Matrix ret = Matrix(colNum, rowNum);
-        for (int i = 0; i < rowNum; i++)
-            for (int j = 0; j < colNum; j++) ret.mat[j][i] = mat[i][j];
+        Matrix ret(colNum, rowNum);
+        for (size_t i = 0; i < rowNum; i++)
+            for (size_t j = 0; j < colNum; j++) ret[j][i] = (*this)[i][j];
         return ret;
 	}
 
@@ -234,23 +264,23 @@ public: // iterator
 
 		iterator() = default;
 
-		iterator(const iterator &) = default;
+		iterator(const iterator &o) = default;
 
-		iterator &operator=(const iterator &) = default;
+		iterator &operator=(const iterator &o) = default;
 
-		iterator(int _curRow, int _curCol, Matrix *mat, pointer p, std::pair <size_t, size_t> _subL = {0, 0}, std::pair <size_t, size_t> _subR = {0, 0})
-				: curRow(_curRow), curCol(_curCol), subL(_subL), subR(_subR), corresMatrix(mat), ptr(p)
+		iterator(size_type _curRow, size_type _curCol, Matrix *_corresMatrix, pointer _ptr, std::pair <size_type, size_type> _subL = {0, 0}, std::pair <size_type, size_type> _subR = {0, 0})
+            : curRow(_curRow), curCol(_curCol), corresMatrix(_corresMatrix), ptr(_ptr), subL(_subL), subR(_subR)
 		{
-			if (subR == std::make_pair((size_type)0, (size_type)0)) subR = std::make_pair(corresMatrix -> rowLength() - 1, corresMatrix -> colLength() - 1);
+			if (subR == std::make_pair((size_type)0, (size_type)0)) subR = std::make_pair(corresMatrix -> rowLength() - 1, corresMatrix -> columnLength() - 1);
 		}
 
 	private:
 		size_type curRow, curCol;
-		Matrix *corresMatrix;
+		Matrix* corresMatrix;
         pointer ptr;
 		std::pair <size_t, size_t> subL, subR;
 
-		difference_type index()
+		difference_type index() const
 		{
 			return curRow * (subR.second - subL.second + 1) + curCol;
 		}
@@ -266,9 +296,9 @@ public: // iterator
             size_type colLen = subR.second - subL.second + 1;
             size_type tmp = (curCol + offset - subL.second) / colLen + ((offset < 0) && (curCol + offset - subL.second) % colLen != 0);
             auto p = ptr;
-            p -= curRow * mat.colLength() + curCol;
-            p += (curRow + tmp) * mat.colLength() + (curCol + offset - tmp * colLen);
-            return iterator(curRow + tmp, curCol + offset - tmp * colLen, mat, subL, subR, ptr); 
+            p -= curRow * (corresMatrix -> columnLength()) + curCol;
+            p += (curRow + tmp) * (corresMatrix -> columnLength()) + (curCol + offset - tmp * colLen);
+            return iterator(curRow + tmp, curCol + offset - tmp * colLen, corresMatrix, ptr, subL, subR); 
 		}
 
 		iterator operator-(difference_type offset) const
@@ -338,17 +368,17 @@ public: // iterator
 
 	iterator begin()
 	{
-        return iterator(0, 0, this, &mat[0][0]);
+        return iterator(0, 0, this, &(*this)[0][0]);
 	}
 
 	iterator end()
 	{
-        return iterator(rowNum -  1, colNum - 1, this, &mat[rowNum - 1][colNum - 1]);
+        return iterator(rowNum -  1, colNum - 1, this, &(*this)[rowNum - 1][colNum - 1]);
 	}
 
 	std::pair <iterator, iterator> subMatrix(std::pair <size_t, size_t> l, std::pair <size_t, size_t> r)
 	{
-        return std::make_pair(iterator(0, 0, this, &mat[l.first][l.second], l, r), iterator(r.first - l.first, r.second - l.second, this, &mat[r.first][r.second], l, r));
+        return std::make_pair(iterator(0, 0, this, &(*this)[l.first][l.second], l, r), iterator(r.first - l.first, r.second - l.second, this, &(*this)[r.first][r.second], l, r));
 	}
 };
 
@@ -360,30 +390,33 @@ namespace sjtu
 template<class T, class U>
 auto operator*(const Matrix<T> &mat, const U &x)
 {
-    Matrix<decltype(T() * U())> ret = mat;
-    for (int i = 0; i < ret.rowLength(); i++)
-        for (int j = 0; j < ret.colLength(); j++) ret(i,j) *= x;
+    Matrix<decltype(T() * U())> ret(mat.rowLength(), mat.columnLength());
+    for (size_t i = 0; i < ret.rowLength(); i++)
+        for (size_t j = 0; j < ret.columnLength(); j++)
+        	ret(i,j) = static_cast<decltype(T() * U())>(mat(i,j)) * static_cast<decltype(T() * U())>(x);
     return ret;
 }
 
 template<class T, class U>
 auto operator*(const U &x, const Matrix<T> &mat)
 {
-    return mat * x;
+	return mat * x;
 }
 
 template<class U, class V>
 auto operator*(const Matrix<U> &a, const Matrix<V> &b)
 {
-    auto ret = Matrix<decltype(U() * V())>(a.rowLength(), b.colLength());
-    for (int i = 0; i < ret.rowLength(); i++)
+	if (a.columnLength() != b.rowLength()) throw(std::invalid_argument("operator * : a.col != b.row"));
+    auto ret = Matrix<decltype(U() * V())>(a.rowLength(), b.columnLength());
+    for (size_t i = 0; i < ret.rowLength(); i++)
     {
-        for (int j = 0; j < ret.colLength(); j++)
+        for (size_t j = 0; j < ret.columnLength(); j++)
         {
-            for (int k = 0; k < a.colLength(); k++)
+            for (size_t k = 0; k < a.columnLength(); k++)
             {
-                ret(i,j) += a(i,k) * b(k,j);
-            }
+                ret(i,j) += static_cast<decltype(U() * V())>(a(i,k)) * static_cast<decltype(U() * V())>(b(k,j));
+
+			}
         }
     }
     return ret;
@@ -392,10 +425,12 @@ auto operator*(const Matrix<U> &a, const Matrix<V> &b)
 template<class U, class V>
 auto operator+(const Matrix<U> &a, const Matrix<V> &b)
 {
-    auto ret = Matrix<decltype(U() + V())>(a.rowLength(), a.colLength());
-    for (int i = 0; i < ret.rowLength(); i++)
+	if (a.rowLength() != b.rowLength() || a.columnLength() != b.columnLength()) throw(std::invalid_argument("operator + : invalid size"));
+    auto ret = Matrix<decltype(U() + V())>(a.rowLength(), a.columnLength());
+    for (size_t i = 0; i < ret.rowLength(); i++)
     {
-        for (int j = 0; j < ret.colLength(); j++) ret(i,j) = a(i,j) + b(i,j);
+        for (size_t j = 0; j < ret.columnLength(); j++)
+			ret(i,j) = static_cast<decltype(U() * V())>(a(i,j)) + static_cast<decltype(U() * V())>(b(i,j));
     }
     return ret;
 }
@@ -403,7 +438,8 @@ auto operator+(const Matrix<U> &a, const Matrix<V> &b)
 template<class U, class V>
 auto operator-(const Matrix<U> &a, const Matrix<V> &b)
 {
-    return a + (-b);
+	if (a.rowLength() != b.rowLength() || a.columnLength() != b.columnLength()) throw(std::invalid_argument("operator - : invalid size"));
+	return a + (-b);
 }
 
 }
