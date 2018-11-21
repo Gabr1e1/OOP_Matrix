@@ -18,15 +18,18 @@ private:
 	size_t rowNum, colNum;
 	T* mat;
 
-	T* operator[](size_t p)
+public:
+    const T &operator()(size_t i, size_t j) const
 	{
-		return mat + p * colNum;
+		if (i < 0 || i >= rowNum || j < 0 || j >= colNum) throw(std::invalid_argument("operator() : invalid index"));
+        return mat[i * colNum + j];
 	}
 
-    const T* operator[] (size_t p) const
-    {
-        return mat + p * colNum;
-    }
+	T &operator()(size_t i, size_t j)
+	{
+		if (i < 0 || i >= rowNum || j < 0 || j >= colNum) throw(std::invalid_argument("operator() : invalid index"));
+		return mat[i * colNum + j];
+	}
     
 public:
 	Matrix() : rowNum(0), colNum(0), mat(nullptr) {}
@@ -37,7 +40,7 @@ public:
 		for (size_t i = 0; i < rowNum; i++)
 			for (size_t j = 0; j < colNum; j++)
 			{
-				(*this)[i][j] = _init;
+				(*this)(i, j) = _init;
 			}
 	}
 
@@ -57,7 +60,7 @@ public:
             auto curElement = curRow -> begin();
 			for (size_t j = 0; j < colNum; j++, curElement++)
 			{
-				(*this)[i][j] = *curElement;
+				(*this)(i,j) = *curElement;
 			}
         }
 	}
@@ -68,7 +71,7 @@ public:
 		for (size_t i = 0; i < rowNum; i++)
 			for (size_t j = 0; j < colNum; j++)
 			{
-				(*this)[i][j] = o[i][j];
+				(*this)(i,j) = o(i,j);
 			}
 	}
 
@@ -79,7 +82,7 @@ public:
         for (size_t i = 0; i < rowNum; i++)
             for (size_t j = 0; j < colNum; j++)
             {
-				(*this)[i][j] = static_cast<T>(o(i,j));
+				(*this)(i,j) = static_cast<T>(o(i,j));
             }
 	}
 
@@ -100,7 +103,7 @@ public:
 		for (size_t i = 0; i < rowNum; i++)
 			for (size_t j = 0; j < colNum; j++)
 			{
-				(*this)[i][j] = o(i,j);
+				(*this)(i,j) = o(i,j);
 			}
 		return (*this);
 	}
@@ -116,7 +119,7 @@ public:
         for (size_t i = 0; i < rowNum; i++)
             for (size_t j = 0; j < colNum; j++)
             {
-                (*this)[i][j] = static_cast<T>(o(i, j));
+                (*this)(i,j) = static_cast<T>(o(i, j));
             }
         return (*this);
 	}
@@ -178,23 +181,11 @@ public:
 	}
 
 public:
-	const T &operator()(size_t i, size_t j) const
-	{
-		if (i < 0 || i >= rowNum || j < 0 || j >= colNum) throw(std::invalid_argument("operator() : invalid index"));
-        return (*this)[i][j];
-	}
-
-	T &operator()(size_t i, size_t j)
-	{
-		if (i < 0 || i >= rowNum || j < 0 || j >= colNum) throw(std::invalid_argument("operator() : invalid index"));
-		return (*this)[i][j];
-	}
-
 	Matrix row(size_t i) const
 	{
 		if (i < 0 || i >= rowNum) throw(std::invalid_argument("row : invalid index"));
 		Matrix ret(1,colNum);
-        for (size_t j = 0; j < colNum; j++) ret[0][j] = (*this)[i][j];
+        for (size_t j = 0; j < colNum; j++) ret(0,j) = (*this)(i,j);
         return ret;
 	}
 
@@ -202,7 +193,7 @@ public:
 	{
 		if (i < 0 || i >= colNum) throw(std::invalid_argument("column : invalid index"));
 		Matrix ret(rowNum,1);
-        for (size_t j = 0; j < rowNum; j++) ret[j][0] = (*this)[j][i];
+        for (size_t j = 0; j < rowNum; j++) ret(j,0) = (*this)(j,i);
         return ret;
 	}
 
@@ -214,7 +205,7 @@ public:
         if (rowNum != o.rowLength() || colNum != o.columnLength()) return false;
         for (size_t i = 0; i < rowNum; i++)
             for (size_t j = 0; j < colNum; j++)
-                if ((*this)[i][j] != o(i,j)) return false;
+                if ((*this)(i,j) != o(i,j)) return false;
         return true;
 	}
 
@@ -228,7 +219,7 @@ public:
 	{
         Matrix ret(rowNum, colNum);
         for (size_t i = 0; i < rowNum; i++)
-            for (size_t j = 0; j < colNum; j++) ret[i][j] = -(*this)[i][j];
+            for (size_t j = 0; j < colNum; j++) ret(i,j) = -(*this)(i,j);
         return ret;
 	}
 
@@ -237,7 +228,7 @@ public:
 	{
 		if (rowNum != o.rowLength() || colNum != o.columnLength()) throw(std::invalid_argument("operator += : invalid addend"));
 		for (size_t i = 0; i < rowNum; i++)
-            for (size_t j = 0; j < colNum; j++) (*this)[i][j] = static_cast<T>((*this)[i][j] + o(i,j));
+            for (size_t j = 0; j < colNum; j++) (*this)(i,j) = static_cast<T>((*this)(i,j) + o(i,j));
         return (*this);
 	}
 
@@ -246,7 +237,7 @@ public:
 	{
 		if (rowNum != o.rowLength() || colNum != o.columnLength()) throw(std::invalid_argument("operator += : invalid subtrahend"));
 		for (size_t i = 0; i < rowNum; i++)
-            for (size_t j = 0; j < colNum; j++) (*this)[i][j] = static_cast<T>((*this)[i][j] - o(i,j));
+            for (size_t j = 0; j < colNum; j++) (*this)(i,j) = static_cast<T>((*this)(i,j) - o(i,j));
         return (*this);
 	}
 
@@ -254,7 +245,7 @@ public:
 	Matrix &operator*=(const U &x)
 	{
         for (size_t i = 0; i < rowNum; i++)
-            for (size_t j = 0; j < colNum; j++) (*this)[i][j] = static_cast<T>((*this)[i][j] * x);
+            for (size_t j = 0; j < colNum; j++) (*this)(i,j) = static_cast<T>((*this)(i,j) * x);
         return (*this);
 	}
 
@@ -262,7 +253,7 @@ public:
 	{
         Matrix ret(colNum, rowNum);
         for (size_t i = 0; i < rowNum; i++)
-            for (size_t j = 0; j < colNum; j++) ret[j][i] = (*this)[i][j];
+            for (size_t j = 0; j < colNum; j++) ret(j,i) = (*this)(i,j);
         return ret;
 	}
 
@@ -383,23 +374,23 @@ public: // iterator
 
 	iterator begin()
 	{
-        return iterator(0, 0, this, &(*this)[0][0]);
+        return iterator(0, 0, this, &(*this)(0,0));
 	}
 
 	iterator end()
 	{
-        return iterator(rowNum -  1, colNum - 1, this, &(*this)[rowNum - 1][colNum - 1]);
+        return iterator(rowNum -  1, colNum - 1, this, &(*this)(rowNum - 1, colNum - 1));
 	}
 
 	std::pair <iterator, iterator> subMatrix(std::pair <size_t, size_t> l, std::pair <size_t, size_t> r)
 	{
-        return std::make_pair(iterator(0, 0, this, &(*this)[l.first][l.second], l, r), iterator(r.first - l.first, r.second - l.second, this, &(*this)[r.first][r.second], l, r));
+        return std::make_pair(iterator(0, 0, this, &(*this)(l.first, l.second), l, r), iterator(r.first - l.first, r.second - l.second, this, &(*this)(r.first, r.second), l, r));
 	}
 };
 
 }
 
-//
+
 namespace sjtu
 {
 template<class T, class U>
@@ -415,7 +406,11 @@ auto operator*(const Matrix<T> &mat, const U &x)
 template<class T, class U>
 auto operator*(const U &x, const Matrix<T> &mat)
 {
-	return mat * x;
+    Matrix<decltype(U() * T())> ret(mat.rowLength(), mat.columnLength());
+    for (size_t i = 0; i < ret.rowLength(); i++)
+        for (size_t j = 0; j < ret.columnLength(); j++)
+        	ret(i,j) = static_cast<decltype(U() * T())>(mat(i,j)) * static_cast<decltype(U() * T())>(x);
+    return ret;
 }
 
 template<class U, class V>
